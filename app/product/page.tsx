@@ -297,7 +297,7 @@ export default function Product() {
             Seller: {shortAddress(product?.seller ?? '')}
           </div>
           <Image
-            src="/ethay_logo.jpg"
+            src={product?.ipfsLink ?? '/ethay_logo.jpg'}
             alt="logo"
             width={1500}
             height={100}
