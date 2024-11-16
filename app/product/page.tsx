@@ -38,8 +38,12 @@ export default function Product() {
   const shortAddress = (address: string) => {
     return address.slice(0, 6) + '...' + address.slice(-4)
   }
-  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
-  const contractUsdtAddress = process.env.NEXT_PUBLIC_CONTRACT_USDT!
+  // const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
+  // const contractAddressSepolia =
+  //   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_SEPOLIA!
+  // const contractUsdtAddress = process.env.NEXT_PUBLIC_CONTRACT_USDT!
+  // const contractUsdtSepoliaAddress =
+  //   process.env.NEXT_PUBLIC_CONTRACT_USDT_SEPOLIA!
   const abi = [
     'function getProduct(uint256 _id) public view returns (uint256, string memory, uint256, uint256, bool, address, uint256, string memory, string memory)',
     'function buyProduct(uint256 _id, uint256 _quantity, address _referrer) public',
@@ -50,18 +54,48 @@ export default function Product() {
     'function approve(address spender, uint256 value) public virtual returns (bool)',
     'function balanceOf(address account) public view virtual returns (uint256)',
   ]
+  const getContractAddress = (chainId: number) => {
+    const base_contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
+    const base_usdt = process.env.NEXT_PUBLIC_CONTRACT_USDT!
+    const sepolia_contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_SEPOLIA!
+    const sepolia_usdt = process.env.NEXT_PUBLIC_CONTRACT_USDT_SEPOLIA!
+    switch (chainId) {
+      case 11155111:
+        return {
+          address: sepolia_contract,
+          usdtAddress: sepolia_usdt,
+          rpcUrl: process.env.NEXT_PUBLIC_RPC_URL_SEPOLIA,
+        }
+      case 84532:
+        return {
+          address: base_contract,
+          usdtAddress: base_usdt,
+          rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
+        }
+      default:
+        return { address: '', usdtAddress: '', rpcUrl: '' }
+    }
+  }
+
+  const [chainId, setChainId] = useState<number>(84532)
 
   const provider = new ethers.providers.JsonRpcProvider(
-    process.env.NEXT_PUBLIC_RPC_URL
+    getContractAddress(chainId).rpcUrl
   )
 
   const contractWithProvider = new ethers.Contract(
-    contractAddress,
+    getContractAddress(chainId).address,
     abi,
     provider
   )
 
   const { toast } = useToast()
+
+  const getChainId = async () => {
+    const chainId = await provider.getNetwork()
+    console.log(chainId)
+    return chainId.chainId
+  }
 
   const isUsdtEnough = async () => {
     if (typeof window === 'undefined' || !(window as any).ethereum) {
@@ -78,7 +112,7 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractUsdt = new ethers.Contract(
-        contractUsdtAddress,
+        getContractAddress(chainId).usdtAddress,
         abiForUsdt,
         signer
       )
@@ -148,7 +182,7 @@ export default function Product() {
     setQuantity((prev) => prev + change)
   }
 
-  const checkIsAllowanceEnough = async () => {
+  const checkIsAllowanceEnough = async (chainId: number) => {
     try {
       setLoadingApprove(true)
       const providerWrite = new ethers.providers.Web3Provider(
@@ -156,13 +190,13 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractUsdt = new ethers.Contract(
-        contractUsdtAddress,
+        getContractAddress(chainId).usdtAddress,
         abiForUsdt,
         signer
       )
       const allowance = await contractUsdt.allowance(
         signer.getAddress(),
-        contractAddress
+        getContractAddress(chainId).usdtAddress
       )
       const allowanceNumber = Number(ethers.utils.formatEther(allowance))
       const sum = (product?.price ?? 0) * quantity
@@ -188,7 +222,7 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractUsdt = new ethers.Contract(
-        contractUsdtAddress,
+        getContractAddress(chainId).usdtAddress,
         abiForUsdt,
         signer
       )
@@ -199,7 +233,10 @@ export default function Product() {
         18
       )
 
-      const tx = await contractUsdt.approve(contractAddress, sum)
+      const tx = await contractUsdt.approve(
+        getContractAddress(chainId).address,
+        sum
+      )
       console.log(tx)
       await tx.wait()
       setLoadingApprove(false)
@@ -231,7 +268,7 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractWithSigner = new ethers.Contract(
-        contractAddress,
+        getContractAddress(chainId).address,
         abi,
         signer
       )
@@ -248,7 +285,7 @@ export default function Product() {
       )
       await tx.wait()
       setLoadingBuy(false)
-      await checkIsAllowanceEnough()
+      await checkIsAllowanceEnough(chainId)
     } catch (error) {
       setLoadingBuy(false)
     }
@@ -256,21 +293,26 @@ export default function Product() {
 
   const handleCart = () => {
     console.log('cart')
-    window.postMessage(
+    const dataToSend = {
+      item: { id: product?.id, amount: quantity, referral: product?.seller },
+    }
+    window.parent.postMessage(
       {
         type: 'FROM_PAGE',
         action: 'sendData',
-        data: {
-          item: {
-            id: product?.id,
-            amount: quantity,
-            referal: product?.seller,
-          },
-        },
+        data: dataToSend,
         _ethayMessage: true,
       },
       '*'
     )
+  }
+
+  const handleChangeChain = () => {
+    // change to base
+    ;(window as any).ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: '85432' }],
+    })
   }
 
   useEffect(() => {
@@ -282,7 +324,14 @@ export default function Product() {
 
   useEffect(() => {
     ;(async () => {
-      await checkIsAllowanceEnough()
+      setChainId(chainId)
+      if (![84532, 11155111].includes(chainId)) {
+        toast({
+          title: 'Wrong chain',
+          description: 'Please Switch to Base',
+        })
+      }
+      await checkIsAllowanceEnough(chainId)
     })()
   }, [loadingContractData])
 
@@ -354,31 +403,40 @@ export default function Product() {
             </div>
           </div>
           <div className="flex justify-between gap-x-4 w-full">
-            <Button
-              className="w-full text-lg font-semibold"
-              onClick={() => handleBuy()}
-            >
-              {isNeedAllowance ? (
-                loadingApprove ? (
+            {chainId === 84532 || chainId === 11155111 ? (
+              <Button
+                className="w-full text-lg font-semibold"
+                onClick={() => handleBuy()}
+              >
+                {isNeedAllowance ? (
+                  loadingApprove ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    <>Approve</>
+                  )
+                ) : loadingBuy ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Approving...
+                    Buying...
                   </>
                 ) : (
-                  <>Approve</>
-                )
-              ) : loadingBuy ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Buying...
-                </>
-              ) : (
-                <>
-                  <HandCoinsIcon className="w-4 h-4" />
-                  Buy
-                </>
-              )}
-            </Button>
+                  <>
+                    <HandCoinsIcon className="w-4 h-4" />
+                    Buy
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                className="w-full text-lg font-bold"
+                onClick={handleChangeChain}
+              >
+                Please switch to Base
+              </Button>
+            )}
             <Button className="w-full text-lg font-bold" onClick={handleCart}>
               <ShoppingCartIcon className="w-4 h-4" />
               Cart
