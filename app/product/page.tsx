@@ -123,6 +123,7 @@ export default function Product() {
       ipfsLink: data[7],
       description: data[8],
     }))
+    console.log(product)
     setLoadingContractData(false)
   }
 
@@ -260,10 +261,13 @@ export default function Product() {
         type: 'FROM_PAGE',
         action: 'sendData',
         data: {
-          id: product?.id,
-          amount: quantity,
-          referal: product?.seller,
+          item: {
+            id: product?.id,
+            amount: quantity,
+            referal: product?.seller,
+          },
         },
+        _ethayMessage: true,
       },
       '*'
     )
@@ -296,19 +300,18 @@ export default function Product() {
           <div className=" text-xl font-bold text-left w-full">
             Seller: {shortAddress(product?.seller ?? '')}
           </div>
-          <Image
-            src={product?.ipfsLink ?? '/ethay_logo.jpg'}
-            alt="logo"
-            width={1500}
-            height={100}
-            priority
-            style={{
-              width: '100%',
-              height: 'auto',
-            }}
-            className="rounded-lg"
-            placeholder="empty"
-          />
+          {product?.ipfsLink && (
+            <Image
+              src={`https://ipfs.io/ipfs/${product?.ipfsLink}`}
+              alt="logo"
+              width={500}
+              height={200}
+              priority
+              className="rounded-lg object-contain max-w-[500px] max-h-[200px]"
+              placeholder="empty"
+            />
+          )}
+
           <div className=" flex flex-col w-full">
             <div className="text-xl font-bold w-full text-left flex justify-between">
               {product?.name}
