@@ -227,7 +227,6 @@ export default function Product() {
       setLoadingBuy(false)
       return
     }
-    setIsNeedAllowance(false)
     try {
       setLoadingBuy(true)
       const providerWrite = new ethers.providers.Web3Provider(
@@ -252,6 +251,7 @@ export default function Product() {
         body.referrer
       )
       await tx.wait()
+      console.log('success')
       toast({
         title: 'Success',
         description: 'You have successfully bought the product',
@@ -365,26 +365,34 @@ export default function Product() {
               className="w-full text-lg font-semibold"
               onClick={() => handleBuy()}
             >
-              {isNeedAllowance ? (
-                loadingApprove ? (
+              {(() => {
+                if (isNeedAllowance) {
+                  if (loadingApprove) {
+                    return (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Approving...
+                      </>
+                    )
+                  }
+                  return <>Approve</>
+                }
+                if (loadingBuy) {
+                  return (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Buying...
+                    </>
+                  )
+                }
+
+                return (
                   <>
-                    <Loader2 className="size-4 animate-spin" />
-                    Approving...
+                    <HandCoinsIcon className="w-4 h-4" />
+                    Buy
                   </>
-                ) : (
-                  <>Approve</>
                 )
-              ) : loadingBuy ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Buying...
-                </>
-              ) : (
-                <>
-                  <HandCoinsIcon className="w-4 h-4" />
-                  Buy
-                </>
-              )}
+              })()}
             </Button>
             <Button className="w-full text-lg font-bold" onClick={handleCart}>
               <ShoppingCartIcon className="w-4 h-4" />
