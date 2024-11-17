@@ -38,15 +38,11 @@ export default function Product() {
   const shortAddress = (address: string) => {
     return address.slice(0, 6) + '...' + address.slice(-4)
   }
-  // const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
-  // const contractAddressSepolia =
-  //   process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_SEPOLIA!
-  // const contractUsdtAddress = process.env.NEXT_PUBLIC_CONTRACT_USDT!
-  // const contractUsdtSepoliaAddress =
-  //   process.env.NEXT_PUBLIC_CONTRACT_USDT_SEPOLIA!
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
+  const contractUsdtAddress = process.env.NEXT_PUBLIC_CONTRACT_USDT!
   const abi = [
-    'function getProduct(uint256 _id) public view returns (uint256, string memory, uint256, uint256, bool, address, uint256, string memory, string memory)',
-    'function buyProduct(uint256 _id, uint256 _quantity, address _referrer) public',
+    'function products(uint256 _id) public view returns (uint256, string memory, uint256, uint256, bool, address, uint256, string memory, string memory)',
+    'function buyProduct(address _buyer,uint256 _id, uint256 _quantity, address _referrer) public',
   ]
 
   const abiForUsdt = [
@@ -54,97 +50,70 @@ export default function Product() {
     'function approve(address spender, uint256 value) public virtual returns (bool)',
     'function balanceOf(address account) public view virtual returns (uint256)',
   ]
-  const getContractAddress = (chainId: number) => {
-    const base_contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!
-    const base_usdt = process.env.NEXT_PUBLIC_CONTRACT_USDT!
-    const sepolia_contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_SEPOLIA!
-    const sepolia_usdt = process.env.NEXT_PUBLIC_CONTRACT_USDT_SEPOLIA!
-    switch (chainId) {
-      case 11155111:
-        return {
-          address: sepolia_contract,
-          usdtAddress: sepolia_usdt,
-          rpcUrl: process.env.NEXT_PUBLIC_RPC_URL_SEPOLIA,
-        }
-      case 84532:
-        return {
-          address: base_contract,
-          usdtAddress: base_usdt,
-          rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
-        }
-      default:
-        return { address: '', usdtAddress: '', rpcUrl: '' }
-    }
-  }
-
-  const [chainId, setChainId] = useState<number>(84532)
 
   const provider = new ethers.providers.JsonRpcProvider(
-    getContractAddress(chainId).rpcUrl
+    process.env.NEXT_PUBLIC_RPC_URL
   )
 
   const contractWithProvider = new ethers.Contract(
-    getContractAddress(chainId).address,
+    contractAddress,
     abi,
     provider
   )
 
   const { toast } = useToast()
 
-  const getChainId = async () => {
-    const chainId = await provider.getNetwork()
-    console.log(chainId)
-    return chainId.chainId
-  }
+  // const isUsdtEnough = async () => {
+  //   if (typeof window === 'undefined' || !(window as any).ethereum) {
+  //     toast({
+  //       title: 'Wallet not found',
+  //       description: 'Please install a Web3 wallet like MetaMask',
+  //     })
+  //     return false
+  //   }
 
-  const isUsdtEnough = async () => {
-    if (typeof window === 'undefined' || !(window as any).ethereum) {
-      toast({
-        title: 'Wallet not found',
-        description: 'Please install a Web3 wallet like MetaMask',
-      })
-      return false
-    }
+  //   try {
+  //     const providerWrite = new ethers.providers.Web3Provider(
+  //       (window as any).ethereum
+  //     )
+  //     const signer = providerWrite.getSigner()
+  //     const contractUsdt = new ethers.Contract(
+  //       contractUsdtAddress,
+  //       abiForUsdt,
+  //       signer
+  //     )
+  //     const balance = await contractUsdt.balanceOf(await signer.getAddress())
+  //     const sum = (product?.price ?? 0) * quantity
 
-    try {
-      const providerWrite = new ethers.providers.Web3Provider(
-        (window as any).ethereum
-      )
-      const signer = providerWrite.getSigner()
-      const contractUsdt = new ethers.Contract(
-        getContractAddress(chainId).usdtAddress,
-        abiForUsdt,
-        signer
-      )
-      const balance = await contractUsdt.balanceOf(await signer.getAddress())
-      const sum = (product?.price ?? 0) * quantity
-
-      if (Number(ethers.utils.formatEther(balance)) < sum) {
-        toast({
-          title: 'Not enough USDT',
-          description: 'Please add more USDT to your wallet',
-        })
-        return false
-      }
-      return true
-    } catch (error) {
-      console.error('Error checking USDT balance:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to check USDT balance',
-      })
-      return false
-    }
-  }
+  //     if (Number(ethers.utils.formatEther(balance)) < sum) {
+  //       toast({
+  //         title: 'Not enough USDT',
+  //         description: 'Please add more USDT to your wallet',
+  //       })
+  //       return false
+  //     }
+  //     return true
+  //   } catch (error) {
+  //     console.error('Error checking USDT balance:', error)
+  //     toast({
+  //       title: 'Error',
+  //       description: 'Failed to check USDT balance',
+  //     })
+  //     return false
+  //   }
+  // }
 
   const contractData = async () => {
+    console.log(contractAddress, 'in get data')
     setLoadingContractData(true)
 
     const id = queryParams.get('value')
 
     console.log(id)
 
-    const data = await contractWithProvider.getProduct(Number(id) || 0)
+    const data = await contractWithProvider.products(Number(id) || 0)
+
+    console.log(data)
     setProduct((prev) => ({
       ...prev,
       id: data[0].toNumber(),
@@ -182,7 +151,7 @@ export default function Product() {
     setQuantity((prev) => prev + change)
   }
 
-  const checkIsAllowanceEnough = async (chainId: number) => {
+  const checkIsAllowanceEnough = async () => {
     try {
       setLoadingApprove(true)
       const providerWrite = new ethers.providers.Web3Provider(
@@ -190,13 +159,13 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractUsdt = new ethers.Contract(
-        getContractAddress(chainId).usdtAddress,
+        contractUsdtAddress,
         abiForUsdt,
         signer
       )
       const allowance = await contractUsdt.allowance(
         signer.getAddress(),
-        getContractAddress(chainId).usdtAddress
+        contractAddress
       )
       const allowanceNumber = Number(ethers.utils.formatEther(allowance))
       const sum = (product?.price ?? 0) * quantity
@@ -222,7 +191,7 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractUsdt = new ethers.Contract(
-        getContractAddress(chainId).usdtAddress,
+        contractUsdtAddress,
         abiForUsdt,
         signer
       )
@@ -233,10 +202,7 @@ export default function Product() {
         18
       )
 
-      const tx = await contractUsdt.approve(
-        getContractAddress(chainId).address,
-        sum
-      )
+      const tx = await contractUsdt.approve(contractAddress, sum)
       console.log(tx)
       await tx.wait()
       setLoadingApprove(false)
@@ -250,10 +216,10 @@ export default function Product() {
       return
     }
 
-    if (!(await isUsdtEnough())) {
-      console.log('not enough usdt')
-      return
-    }
+    // if (!(await isUsdtEnough())) {
+    //   console.log('not enough usdt')
+    //   return
+    // }
 
     if (isNeedAllowance) {
       await approve()
@@ -268,7 +234,7 @@ export default function Product() {
       )
       const signer = providerWrite.getSigner()
       const contractWithSigner = new ethers.Contract(
-        getContractAddress(chainId).address,
+        contractAddress,
         abi,
         signer
       )
@@ -279,13 +245,14 @@ export default function Product() {
       }
       console.log(body)
       const tx = await contractWithSigner.buyProduct(
+        await signer.getAddress(),
         body.id,
         body.quantity,
         body.referrer
       )
       await tx.wait()
       setLoadingBuy(false)
-      await checkIsAllowanceEnough(chainId)
+      await checkIsAllowanceEnough()
     } catch (error) {
       setLoadingBuy(false)
     }
@@ -307,31 +274,17 @@ export default function Product() {
     )
   }
 
-  const handleChangeChain = () => {
-    // change to base
-    ;(window as any).ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: '85432' }],
-    })
-  }
-
   useEffect(() => {
     ;(async () => {
       setLoading(true)
+
       await contractData()
     })()
   }, [])
 
   useEffect(() => {
     ;(async () => {
-      setChainId(chainId)
-      if (![84532, 11155111].includes(chainId)) {
-        toast({
-          title: 'Wrong chain',
-          description: 'Please Switch to Base',
-        })
-      }
-      await checkIsAllowanceEnough(chainId)
+      await checkIsAllowanceEnough()
     })()
   }, [loadingContractData])
 
@@ -403,40 +356,31 @@ export default function Product() {
             </div>
           </div>
           <div className="flex justify-between gap-x-4 w-full">
-            {chainId === 84532 || chainId === 11155111 ? (
-              <Button
-                className="w-full text-lg font-semibold"
-                onClick={() => handleBuy()}
-              >
-                {isNeedAllowance ? (
-                  loadingApprove ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      Approving...
-                    </>
-                  ) : (
-                    <>Approve</>
-                  )
-                ) : loadingBuy ? (
+            <Button
+              className="w-full text-lg font-semibold"
+              onClick={() => handleBuy()}
+            >
+              {isNeedAllowance ? (
+                loadingApprove ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Buying...
+                    Approving...
                   </>
                 ) : (
-                  <>
-                    <HandCoinsIcon className="w-4 h-4" />
-                    Buy
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button
-                className="w-full text-lg font-bold"
-                onClick={handleChangeChain}
-              >
-                Please switch to Base
-              </Button>
-            )}
+                  <>Approve</>
+                )
+              ) : loadingBuy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Buying...
+                </>
+              ) : (
+                <>
+                  <HandCoinsIcon className="w-4 h-4" />
+                  Buy
+                </>
+              )}
+            </Button>
             <Button className="w-full text-lg font-bold" onClick={handleCart}>
               <ShoppingCartIcon className="w-4 h-4" />
               Cart
