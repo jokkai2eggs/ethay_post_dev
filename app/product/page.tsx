@@ -227,6 +227,7 @@ export default function Product() {
       setLoadingBuy(false)
       return
     }
+    setIsNeedAllowance(false)
     try {
       setLoadingBuy(true)
       const providerWrite = new ethers.providers.Web3Provider(
@@ -251,6 +252,10 @@ export default function Product() {
         body.referrer
       )
       await tx.wait()
+      toast({
+        title: 'Success',
+        description: 'You have successfully bought the product',
+      })
       setLoadingBuy(false)
       await checkIsAllowanceEnough()
     } catch (error) {
